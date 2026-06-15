@@ -1,16 +1,16 @@
 import { useState, FormEvent } from 'react';
 import { Eye, EyeOff, Lock, User, Loader2 } from 'lucide-react';
 
-// Rozhraní jsme rozšířili o token a hodnotu checkboxu
+// Zde jsme přidali 4. parametr: permissions (pole čísel)
 interface LoginFormProps {
-  onLoginSuccess: (name: string, token: string, rememberMe: boolean) => void;
+  onLoginSuccess: (name: string, token: string, rememberMe: boolean, permissions: number[]) => void;
 }
 
 export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true); // Výchozí zaškrtnutí "Zůstat přihlášen"
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -20,6 +20,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
     setIsLoading(true);
 
     try {
+      // Malá prodleva pro efekt (v produkci můžeš smazat)
       await new Promise(resolve => setTimeout(resolve, 600));
 
       const response = await fetch('http://localhost:8000/api/login', {
@@ -32,8 +33,9 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
       
       const data = await response.json();
       
-      // Odesíláme data zpět do App.tsx včetně informace, jestli to máme uložit
-      onLoginSuccess(data.name, data.token, rememberMe);
+      // KLÍČOVÁ OPRAVA: Odesíláme i data.permissions (a pro jistotu přidáváme || [], kdyby backend neposlal nic)
+      onLoginSuccess(data.name, data.token, rememberMe, data.permissions || []);
+      
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -71,7 +73,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
             <input
               type="text"
               className="block w-full pl-11 pr-4 py-3.5 border border-gray-200 dark:border-gray-600 rounded-2xl leading-5 bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white placeholder-gray-400 focus:bg-white dark:focus:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 focus:-translate-y-1 focus:shadow-lg sm:text-sm"
-              placeholder="např. udrzba"
+              placeholder="např. udrzba nebo admin"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
@@ -108,7 +110,6 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
           </div>
         </div>
 
-        {/* --- NOVÉ: Checkbox "Pamatovat si mě" a odkaz na heslo --- */}
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center group/check cursor-pointer">
             <input
