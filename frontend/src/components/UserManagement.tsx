@@ -40,11 +40,11 @@ export default function UserManagement({ onBack, userPermissions }: UserManageme
   // Načtení kompletních dat z backendu při startu nebo změně
   const refreshData = async () => {
     try {
-      const resUsers = await fetch('http://localhost:8000/api/users');
+      const resUsers = await fetch('/api/users');
       const dataUsers = await resUsers.json();
       setUsersList(dataUsers);
 
-      const resRoles = await fetch('http://localhost:8000/api/roles');
+      const resRoles = await fetch('/api/roles');
       const dataRoles = await resRoles.json();
       setRolesList(dataRoles);
       
@@ -79,7 +79,7 @@ export default function UserManagement({ onBack, userPermissions }: UserManageme
     e.preventDefault();
     try {
       const isEditing = editingUsername !== null;
-      const url = isEditing ? `http://localhost:8000/api/users/${editingUsername}` : 'http://localhost:8000/api/users';
+      const url = isEditing ? `/api/users/${editingUsername}` : '/api/users';
       const method = isEditing ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -113,7 +113,7 @@ export default function UserManagement({ onBack, userPermissions }: UserManageme
     e.preventDefault();
     if (!newRoleId || !newRoleName) return;
     try {
-      const res = await fetch('http://localhost:8000/api/roles', {
+      const res = await fetch('/api/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: newRoleId.toLowerCase(), name: newRoleName, permissions: [1, 7] }) // Výchozí práva na založení a přehled
@@ -143,7 +143,7 @@ export default function UserManagement({ onBack, userPermissions }: UserManageme
     }
 
     try {
-      await fetch(`http://localhost:8000/api/roles/${roleId}`, {
+      await fetch(`/api/roles/${roleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: roleId, name: targetRole.name, permissions: updatedPermissions })

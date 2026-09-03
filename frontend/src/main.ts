@@ -7,7 +7,7 @@ const fetchItems = async (): Promise<void> => {
     const appDiv = document.getElementById('app');
     
     try {
-        const response = await fetch('http://localhost:8000/api/items');
+        const response = await fetch('/api/items');
         if (!response.ok) throw new Error('Chyba sítě');
         
         const data: Item[] = await response.json();

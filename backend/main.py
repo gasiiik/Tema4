@@ -48,7 +48,16 @@ MOCK_PARTS = [
         "source_equipment": "Lis Kuka 02",
         "created_by_user": "Jan Novák",
         "created_at": "2026-05-10T14:32:00",
-        "photos": []
+        "photos": [],
+        "history": [
+            {
+                "action": "Založení",
+                "user": "Jan Novák",
+                "date": "2026-05-10T14:32:00",
+                "details": {"info": "Původní zaevidování"},
+                "photos": []
+            }
+        ]
     },
     {
         "part_type": "Hydraulický ventil Bosch",
@@ -57,7 +66,16 @@ MOCK_PARTS = [
         "source_equipment": "Hlavní hydraulická stanice",
         "created_by_user": "Hlavní Admin",
         "created_at": "2026-06-01T09:15:00",
-        "photos": []
+        "photos": [],
+        "history": [
+            {
+                "action": "Založení",
+                "user": "Hlavní Admin",
+                "date": "2026-06-01T09:15:00",
+                "details": {"info": "Původní zaevidování"},
+                "photos": []
+            }
+        ]
     },
     {
         "part_type": "Indukční snímač IFM",
@@ -66,7 +84,16 @@ MOCK_PARTS = [
         "source_equipment": "Dopravník balení 04",
         "created_by_user": "Jan Novák",
         "created_at": "2026-06-12T11:05:00",
-        "photos": []
+        "photos": [],
+        "history": [
+            {
+                "action": "Založení",
+                "user": "Jan Novák",
+                "date": "2026-06-12T11:05:00",
+                "details": {"info": "Původní zaevidování"},
+                "photos": []
+            }
+        ]
     }
 ]
 
@@ -112,9 +139,12 @@ def login(credentials: LoginRequest):
 @app.post("/api/parts")
 async def create_part(
     part_type: str = Form(...),
+    device_type: Optional[str] = Form(None),
     serial_number: Optional[str] = Form(None),
     parameters: Optional[str] = Form(None),
+    additional_identifier: Optional[str] = Form(None),
     source_equipment: str = Form(...),
+    source_serial_number: Optional[str] = Form(None),
     created_by_user: str = Form(...),
     photos: List[UploadFile] = File(default=[])
 ):
@@ -133,28 +163,41 @@ async def create_part(
         
         # Procházíme nahrávané soubory
         for photo in photos:
-            if photo.filename and photo.filename.strip() != "":
-                # Vygenerujeme unikátní název souboru pomocí UUID, aby se fotky nepřepsaly
+            ext = "jpg"
+            if photo.filename and photo.filename.strip() != "" and "." in photo.filename:
                 ext = photo.filename.split('.')[-1]
-                unique_filename = f"{uuid.uuid4().hex}.{ext}"
-                file_path = os.path.join(UPLOAD_DIR, unique_filename)
-                
-                # ASYNCHRONNÍ ČTENÍ
-                content = await photo.read()
-                with open(file_path, "wb") as buffer:
-                    buffer.write(content)
-                
-                # Uložíme veřejnou URL adresu
-                saved_photo_urls.append(f"http://localhost:8000/uploads/{unique_filename}")
+            
+            unique_filename = f"{uuid.uuid4().hex}.{ext}"
+            file_path = os.path.join(UPLOAD_DIR, unique_filename)
+            
+            # ASYNCHRONNÍ ČTENÍ
+            content = await photo.read()
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            
+            # Uložíme veřejnou URL adresu
+            saved_photo_urls.append(f"/uploads/{unique_filename}")
 
         new_part = {
             "part_type": part_type,
+            "device_type": device_type or "Neuvedeno",
             "serial_number": serial_number,
             "parameters": parameters or "Neuvedeno",
-            "source_equipment": source_equipment,
+            "additional_identifier": additional_identifier or "",
+            "source_equipment": "Neuvedeno",
+            "source_serial_number": source_serial_number or "",
             "created_by_user": created_by_user,
             "created_at": datetime.now().isoformat(),
-            "photos": saved_photo_urls
+            "photos": saved_photo_urls,
+            "history": [
+                {
+                    "action": "Založení",
+                    "user": created_by_user,
+                    "date": datetime.now().isoformat(),
+                    "details": {"info": "Původní zaevidování", "source": source_equipment},
+                    "photos": saved_photo_urls
+                }
+            ]
         }
 
         MOCK_PARTS.insert(0, new_part)
@@ -171,6 +214,65 @@ async def create_part(
 @app.get("/api/parts")
 def get_parts():
     return MOCK_PARTS
+
+@app.get("/api/parts/{serial_number}")
+def get_part_by_sn(serial_number: str):
+    part = next((p for p in MOCK_PARTS if p.get("serial_number") == serial_number), None)
+    if not part:
+        raise HTTPException(status_code=404, detail="Díl nenalezen")
+    if "history" not in part:
+        part["history"] = []
+    return part
+
+import json
+
+@app.post("/api/parts/{serial_number}/history")
+async def add_part_history(
+    serial_number: str,
+    action: str = Form(...),
+    user: str = Form(...),
+    details: str = Form("{}"),
+    photos: List[UploadFile] = File(default=[])
+):
+    part = next((p for p in MOCK_PARTS if p.get("serial_number") == serial_number), None)
+    if not part:
+        raise HTTPException(status_code=404, detail="Díl nenalezen")
+        
+    saved_photo_urls = []
+    if photos:
+        for photo in photos:
+            ext = "jpg"
+            if photo.filename and photo.filename.strip() != "" and "." in photo.filename:
+                ext = photo.filename.split('.')[-1]
+            
+            unique_filename = f"{uuid.uuid4().hex}.{ext}"
+            file_path = os.path.join(UPLOAD_DIR, unique_filename)
+            
+            content = await photo.read()
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            
+            saved_photo_urls.append(f"/uploads/{unique_filename}")
+
+    try:
+        details_dict = json.loads(details)
+    except:
+        details_dict = {"raw": details}
+
+    record = {
+        "action": action,
+        "user": user,
+        "date": datetime.now().isoformat(),
+        "details": details_dict,
+        "photos": saved_photo_urls
+    }
+    
+    if "history" not in part:
+        part["history"] = []
+    
+    part["history"].insert(0, record)
+    
+    return {"status": "success", "message": "Historie aktualizována", "part": part}
 
 @app.get("/api/users")
 def get_users():

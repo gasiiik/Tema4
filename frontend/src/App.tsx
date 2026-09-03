@@ -4,6 +4,10 @@ import MainMenu from './components/MainMenu';
 import PartCreationForm from './components/PartCreationForm';
 import UserManagement from './components/UserManagement';
 import PartListModule from './components/PartListModule';
+import LineUsageForm from './components/LineUsageForm';
+import RepairArrivalForm from './components/RepairArrivalForm';
+import DismantleForm from './components/DismantleForm';
+import PartInfoView from './components/PartInfoView';
 import { Moon, Sun } from 'lucide-react';
 
 function App() {
@@ -76,8 +80,13 @@ function App() {
     if (!isAuthenticated) return <LoginForm onLoginSuccess={handleLoginSuccess} />;
 
     if (activeModule === 1) return <PartCreationForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
+    if (activeModule === 2) return <RepairArrivalForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
+    if (activeModule === 3) return <LineUsageForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
+    if (activeModule === 4) return <DismantleForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
+    
     if (activeModule === 6) return <UserManagement userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
     if (activeModule === 7) return <PartListModule userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
+    if (activeModule === 99) return <PartInfoView onBack={() => setActiveModule(null)} />;
 
     return <MainMenu userName={userName} userPermissions={userPermissions} onLogout={handleLogout} onSelectModule={(id) => setActiveModule(id)} />;
   };

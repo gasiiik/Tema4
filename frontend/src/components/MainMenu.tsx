@@ -97,7 +97,10 @@ export default function MainMenu({ userName, userPermissions, onLogout, onSelect
         className="mt-10 flex justify-center opacity-0 animate-fade-in-up" 
         style={{ animationDelay: '900ms' }}
       >
-        <button className="relative overflow-hidden group flex items-center justify-center gap-3 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-full shadow-xl hover:shadow-indigo-500/40 transform hover:-translate-y-1 transition-all duration-300">
+        <button 
+          onClick={() => onSelectModule(99)}
+          className="relative overflow-hidden group flex items-center justify-center gap-3 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-full shadow-xl hover:shadow-indigo-500/40 transform hover:-translate-y-1 transition-all duration-300"
+        >
           <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-full"></div>
           <ScanLine className="w-6 h-6 group-hover:animate-bounce z-10" />
           <span className="z-10">Skenovat kód zařízení</span>

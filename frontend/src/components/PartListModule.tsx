@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 // Přidány ikony ChevronLeft a ChevronRight pro listování
-import { ArrowLeft, Search, Calendar, User, Cpu, Hash, LayoutGrid, ShieldAlert, Loader2, Image as ImageIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Search, Calendar, User, Cpu, Hash, LayoutGrid, ShieldAlert, Loader2, Image as ImageIcon, X, ChevronLeft, ChevronRight, Printer, Info } from 'lucide-react';
+import CodePrinter from './Shared/CodePrinter';
+import PartInfoView from './PartInfoView';
 
 interface PartListModuleProps {
   onBack: () => void;
@@ -21,6 +23,10 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
   const [viewPhotos, setViewPhotos] = useState<string[] | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
+  // Tisk a Detail
+  const [printPart, setPrintPart] = useState<any>(null);
+  const [detailPartCode, setDetailPartCode] = useState<string | null>(null);
+
   if (!userPermissions.includes(7)) {
     return (
       <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl text-center max-w-md mx-auto">
@@ -32,7 +38,7 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
   }
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/parts')
+    fetch('/api/parts')
       .then(res => res.json())
       .then(data => {
         setParts(data);
@@ -80,8 +86,14 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
     setCurrentPhotoIndex(0);
   };
 
+  if (detailPartCode) {
+    return <PartInfoView initialScannedCode={detailPartCode} onBack={() => setDetailPartCode(null)} />;
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden w-full max-w-5xl mx-auto transition-colors duration-300 animate-pop-in relative">
+      
+      {printPart && <CodePrinter part={printPart} onClose={() => setPrintPart(null)} />}
       
       {/* --- VYLEPŠENÉ MODÁLNÍ OKNO PRO FOTKY (FULLSCREEN LIGHTBOX) --- */}
       {viewPhotos !== null && (
@@ -221,6 +233,11 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
                     </button>
                   )}
 
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={() => setDetailPartCode(part.serial_number)} className="flex-1 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold flex justify-center items-center gap-1"><Info className="w-4 h-4"/> Detail</button>
+                    <button onClick={() => setPrintPart(part)} className="flex-1 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-xl font-bold flex justify-center items-center gap-1"><Printer className="w-4 h-4"/> Tisk</button>
+                  </div>
+
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-2 grid grid-cols-2 gap-2 text-[11px] text-gray-500 dark:text-gray-400">
                     <div><span className="block font-semibold text-gray-600 dark:text-gray-300">Zapsal:</span> {part.created_by_user}</div>
                     <div className="text-right"><span className="block font-semibold text-gray-600 dark:text-gray-300">Kdy:</span> {formatDate(part.created_at)}</div>
@@ -239,7 +256,8 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
                     <th className="p-4">Demontováno z</th>
                     <th className="p-4"><div className="flex items-center gap-1.5"><User className="w-4 h-4"/> Zapsal (Kdo)</div></th>
                     <th className="p-4"><div className="flex items-center gap-1.5"><Calendar className="w-4 h-4"/> Datum (Kdy)</div></th>
-                    <th className="p-4 text-center">Fotodokumentace</th>
+                    <th className="p-4 text-center">Fotky</th>
+                    <th className="p-4 text-right">Akce</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
@@ -266,6 +284,16 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
                         ) : (
                           <span className="text-xs text-gray-400 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-xl">Bez fota</span>
                         )}
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => setDetailPartCode(part.serial_number)} className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors" title="Historie a detail">
+                            <Info className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setPrintPart(part)} className="p-2 bg-gray-900 dark:bg-gray-700 text-white hover:bg-gray-800 dark:hover:bg-gray-600 rounded-xl transition-colors" title="Vytisknout kód">
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

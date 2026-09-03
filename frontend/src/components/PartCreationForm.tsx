@@ -1,6 +1,7 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { ArrowLeft, Camera, Loader2, CheckCircle2, FileText, Settings, Cpu, AlertTriangle, Plus, X, Printer, Barcode as BarcodeIcon } from 'lucide-react';
-import Barcode from 'react-barcode'; // Nová knihovna
+import { ArrowLeft, Camera, Loader2, CheckCircle2, FileText, Settings, Cpu, AlertTriangle, Plus, X, Printer, Barcode as BarcodeIcon, Scan } from 'lucide-react';
+import BarcodeScannerModal from './BarcodeScannerModal';
+import CodePrinter from './Shared/CodePrinter';
 
 interface PartCreationFormProps {
   userName: string;
@@ -11,11 +12,15 @@ interface PartCreationFormProps {
 export default function PartCreationForm({ userName, userPermissions, onBack }: PartCreationFormProps) {
   const [partType, setPartType] = useState('');
   const [parameters, setParameters] = useState('');
+  const [additionalIdentifier, setAdditionalIdentifier] = useState('');
   const [sourceEquipment, setSourceEquipment] = useState('');
+  const [sourceSerialNumber, setSourceSerialNumber] = useState('');
   
   // Řízení sériového čísla
   const [isAutoGenerate, setIsAutoGenerate] = useState(false);
   const [serialNumber, setSerialNumber] = useState('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Dynamické pole fotek (max 5)
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
@@ -77,7 +82,9 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
       const formData = new FormData();
       formData.append('part_type', partType);
       formData.append('parameters', parameters);
+      if (additionalIdentifier) formData.append('additional_identifier', additionalIdentifier);
       formData.append('source_equipment', sourceEquipment);
+      if (sourceSerialNumber) formData.append('source_serial_number', sourceSerialNumber);
       formData.append('created_by_user', userName);
       
       if (!isAutoGenerate) {
@@ -87,7 +94,7 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
       // Přidáme všechny fotky pod stejným klíčem "photos"
       photos.forEach(p => formData.append('photos', p.file));
 
-      const response = await fetch('http://localhost:8000/api/parts', {
+      const response = await fetch('/api/parts', {
         method: 'POST',
         body: formData,
       });
@@ -105,53 +112,31 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // --- OBRAZOVKA ÚSPĚCHU (PŘIPRAVENÁ PRO TISK) ---
+  // --- OBRAZOVKA ÚSPĚCHU ---
   if (successData) {
     return (
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl text-center max-w-md mx-auto animate-pop-in print:shadow-none print:bg-transparent print:p-0">
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl text-center max-w-md mx-auto animate-pop-in">
         
-        {/* Tento blok se schová při tisku */}
-        <div className="print:hidden">
-          <div className="inline-block p-4 bg-green-50 dark:bg-green-900/30 rounded-full mb-4 text-green-500">
-            <CheckCircle2 className="w-16 h-16 mx-auto" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Úspěšně zaevidováno</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-2 mb-6 text-sm">
-            {successData.is_new_generated 
-              ? 'Byl vytvořen zcela nový záznam a vygenerováno sériové číslo.' 
-              : 'Díl s existujícím štítkem byl zapsán do databáze.'}
-          </p>
+        <div className="inline-block p-4 bg-green-50 dark:bg-green-900/30 rounded-full mb-4 text-green-500">
+          <CheckCircle2 className="w-16 h-16 mx-auto" />
         </div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Úspěšně zaevidováno</h2>
+        <p className="text-gray-500 dark:text-gray-400 mt-2 mb-6 text-sm">
+          {successData.is_new_generated 
+            ? 'Byl vytvořen zcela nový záznam a vygenerováno sériové číslo.' 
+            : 'Díl s existujícím štítkem byl zapsán do databáze.'}
+        </p>
 
-        {/* --- ČÁROVÝ KÓD (Toto se vytiskne) --- */}
-        <div className="bg-white p-6 border-2 border-dashed border-gray-300 rounded-2xl mb-6 flex flex-col items-center print:border-solid print:border-black print:mb-0">
-          <h3 className="font-bold text-lg text-gray-800 uppercase tracking-widest mb-2">{successData.part_type}</h3>
-          <Barcode 
-            value={successData.serial_number} 
-            width={1.8} 
-            height={80} 
-            fontSize={16} 
-            background="#ffffff" 
-            lineColor="#000000" 
-          />
-          <p className="text-xs text-gray-500 mt-3 font-mono">Datum zápisu: {currentTimestamp}</p>
-        </div>
-
-        {/* Tlačítka se schovají při tisku */}
-        <div className="space-y-3 print:hidden">
-          {successData.is_new_generated && (
-            <button onClick={handlePrint} className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-3.5 px-4 rounded-xl flex justify-center items-center gap-2 transition-all">
-              <Printer className="w-5 h-5" /> Vytisknout štítek
-            </button>
-          )}
+        <div className="space-y-3">
+          <button onClick={() => setIsPrinting(true)} className="w-full bg-gray-900 dark:bg-gray-700 hover:bg-gray-800 dark:hover:bg-gray-600 text-white font-bold py-3.5 px-4 rounded-xl flex justify-center items-center gap-2 transition-all">
+            <Printer className="w-5 h-5" /> Vytisknout štítek
+          </button>
           <button onClick={onBack} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-4 rounded-xl transition-all">
             Zpět do menu
           </button>
         </div>
+
+        {isPrinting && <CodePrinter part={successData} onClose={() => setIsPrinting(false)} />}
       </div>
     );
   }
@@ -181,9 +166,12 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
           {!isAutoGenerate ? (
             <div>
               <label className="block text-sm font-semibold mb-1">Opsat sériové číslo ze štítku</label>
-              <div className="relative">
+              <div className="relative flex items-center">
                 <FileText className="absolute left-3.5 top-3 w-5 h-5 text-gray-400" />
-                <input type="text" required={!isAutoGenerate} placeholder="S/N kód" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required={!isAutoGenerate} placeholder="S/N kód" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} className="w-full pl-11 pr-12 p-3 border rounded-xl bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+                <button type="button" onClick={() => setIsScannerOpen(true)} className="absolute right-2 p-1.5 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:hover:bg-indigo-800 text-indigo-600 dark:text-indigo-400 rounded-lg transition-colors">
+                  <Scan className="w-5 h-5" />
+                </button>
               </div>
             </div>
           ) : (
@@ -198,7 +186,30 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
           <label className="block text-sm font-semibold mb-1">Typ dílu</label>
           <div className="relative">
             <Cpu className="absolute left-3.5 top-3 w-5 h-5 text-gray-400" />
-            <input type="text" required placeholder="Servomotor, Ventil..." value={partType} onChange={(e) => setPartType(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+            <input type="text" list="partTypesList" required placeholder="Servomotor, Ventil, Snímač..." value={partType} onChange={(e) => setPartType(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+            <datalist id="partTypesList">
+              <option value="Servomotor" />
+              <option value="Ventil" />
+              <option value="Snímač" />
+              <option value="Ložisko" />
+              <option value="Řídící jednotka" />
+            </datalist>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold mb-1">Parametry</label>
+          <div className="relative">
+            <Settings className="absolute left-3.5 top-3 w-5 h-5 text-gray-400" />
+            <input type="text" placeholder="Např. 3x400V, 1.5kW, IP65..." value={parameters} onChange={(e) => setParameters(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold mb-1">Další identifikátor (volitelné)</label>
+          <div className="relative">
+            <FileText className="absolute left-3.5 top-3 w-5 h-5 text-gray-400" />
+            <input type="text" placeholder="Další značení, revizní kód..." value={additionalIdentifier} onChange={(e) => setAdditionalIdentifier(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
           </div>
         </div>
 
@@ -206,7 +217,11 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
           <label className="block text-sm font-semibold mb-1">Původní zařízení (Demontováno z)</label>
           <div className="relative">
             <Settings className="absolute left-3.5 top-3 w-5 h-5 text-gray-400" />
-            <input type="text" required placeholder="Lis Kuka 02" value={sourceEquipment} onChange={(e) => setSourceEquipment(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+            <input type="text" required placeholder="Název zařízení (např. Lis Kuka 02)" value={sourceEquipment} onChange={(e) => setSourceEquipment(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div className="relative mt-2">
+            <BarcodeIcon className="absolute left-3.5 top-3 w-5 h-5 text-gray-400" />
+            <input type="text" placeholder="Sériové číslo zařízení (volitelné)" value={sourceSerialNumber} onChange={(e) => setSourceSerialNumber(e.target.value)} className="w-full pl-11 p-3 border rounded-xl bg-gray-50/50 dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500" />
           </div>
         </div>
 
@@ -229,7 +244,7 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
               <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-500 transition-colors">
                 <Camera className="w-6 h-6 mb-1" />
                 <span className="text-[10px] font-bold uppercase">Přidat</span>
-                <input type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={handlePhotoAdd} />
+                <input type="file" accept="image/jpeg, image/png, image/webp" multiple capture="environment" className="hidden" onChange={handlePhotoAdd} />
               </label>
             )}
           </div>
@@ -239,6 +254,16 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
           {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Uložit a zaevidovat'}
         </button>
       </form>
+
+      {isScannerOpen && (
+        <BarcodeScannerModal 
+          onClose={() => setIsScannerOpen(false)} 
+          onScanSuccess={(decodedText) => {
+            setSerialNumber(decodedText);
+            setIsScannerOpen(false);
+          }} 
+        />
+      )}
     </div>
   );
 }
