@@ -1,0 +1,27 @@
+﻿# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.class
+
+# Node.js
+node_modules/
+frontend/node_modules/
+dist/
+build/
+frontend/dist/
+
+# Prostředí a konfigurace
+.env
+.env.local
+.env.*.local
+
+# Aplikační data
+backend/uploads/
+
+# Ostatní (zálohy, systémové soubory)
+*.zip
+.DS_Store
+.vscode/
+.idea/
