@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
-import { X, Camera, RefreshCw } from 'lucide-react';
+import { X, Camera, RefreshCw, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 interface BarcodeScannerModalProps {
   onScanSuccess: (decodedText: string) => void;
@@ -128,10 +128,29 @@ export default function BarcodeScannerModal({ onScanSuccess, onClose }: BarcodeS
         ) : (
           <>
             {error && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center p-6 bg-black/90">
-                <div className="text-red-400 text-center p-6 bg-red-950/50 rounded-2xl border border-red-900/50 max-w-sm backdrop-blur-md">
-                  <p className="font-bold mb-2">Chyba kamery</p>
-                  {error}
+              <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-gray-900/80 dark:bg-black/80 backdrop-blur-sm">
+                <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden animate-pop-in border border-gray-100 dark:border-gray-700">
+                  <div className="bg-red-500 dark:bg-red-600 py-8 flex justify-center items-center">
+                    <AlertTriangle className="w-16 h-16 text-white" />
+                  </div>
+                  <div className="p-8 text-center flex flex-col items-center">
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-3">Chyba kamery!</h3>
+                    <p className="text-gray-500 dark:text-gray-400 font-medium mb-8 leading-relaxed">
+                      {error}
+                    </p>
+                    <button 
+                      onClick={() => setIsManualMode(true)}
+                      className="w-full py-3 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white rounded-full font-bold uppercase tracking-wider transition-colors shadow-lg shadow-red-500/30 dark:shadow-red-900/30"
+                    >
+                      Zadat ručně
+                    </button>
+                    <button 
+                      onClick={handleClose}
+                      className="w-full py-3 mt-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-full font-bold uppercase tracking-wider transition-colors"
+                    >
+                      Zpět
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -150,17 +169,23 @@ export default function BarcodeScannerModal({ onScanSuccess, onClose }: BarcodeS
         )}
 
         {!isManualMode && (
-          <div className="absolute bottom-8 left-8 right-8 flex flex-col gap-3">
+          <div className="absolute bottom-8 left-8 right-8 flex flex-col gap-3 z-40">
+            <button 
+              onClick={handleClose}
+              className="w-full py-4 bg-black/50 hover:bg-black/70 backdrop-blur-xl border border-white/20 text-white rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl font-medium"
+            >
+              <ArrowLeft className="w-5 h-5" /> Zpět
+            </button>
             <button 
               onClick={() => setIsManualMode(true)}
-              className="w-full py-4 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/30 text-white rounded-2xl transition-all z-20"
+              className="w-full py-4 bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/30 text-white rounded-2xl transition-all shadow-xl font-medium"
             >
               Zadat kód ručně
             </button>
             {!error && cameras.length > 1 && (
               <button 
                 onClick={handleCameraChange}
-                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl transition-all z-20 flex items-center justify-center gap-2"
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl font-medium"
               >
                 <RefreshCw className="w-5 h-5" /> Přepnout kameru
               </button>

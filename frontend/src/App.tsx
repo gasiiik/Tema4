@@ -7,6 +7,7 @@ import PartListModule from './components/PartListModule';
 import LineUsageForm from './components/LineUsageForm';
 import RepairArrivalForm from './components/RepairArrivalForm';
 import DismantleForm from './components/DismantleForm';
+import DispatchForm from './components/DispatchForm';
 import PartInfoView from './components/PartInfoView';
 import { Moon, Sun } from 'lucide-react';
 
@@ -83,6 +84,7 @@ function App() {
     if (activeModule === 2) return <RepairArrivalForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
     if (activeModule === 3) return <LineUsageForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
     if (activeModule === 4) return <DismantleForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
+    if (activeModule === 5) return <DispatchForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
     
     if (activeModule === 6) return <UserManagement userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
     if (activeModule === 7) return <PartListModule userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
