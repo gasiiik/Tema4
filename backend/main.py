@@ -1,20 +1,20 @@
-import os
-import shutil
+﻿import os
 import uuid
+import json
 from typing import List, Optional
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Form, File, UploadFile
+from fastapi import FastAPI, HTTPException, Form, File, UploadFile, Depends
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+import database
+import models
 
 app = FastAPI(title="Evidence Náhradních Dílů API")
 
-# --- NOVÉ: DEFINICE ABSOLUTNÍ CESTY PRO UKLÁDÁNÍ ---
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# NOVÉ: Zpřístupnění složky přes HTTP protokol na adrese http://localhost:8000/uploads/
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
@@ -25,79 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- GLOBÁLNÍ ROZŠÍŘENÁ DATABÁZE V PAMĚTI ---
-MOCK_ROLES = {
-    "admin": {"name": "Administrátor", "permissions": [1, 2, 3, 4, 5, 6, 7]},
-    "udrzbar": {"name": "Údržbář (Základ)", "permissions": [1, 3, 4, 7]},
-    "skladnik": {"name": "Skladník", "permissions": [2, 5, 7]}
-}
-
-# OBNOVENO: Kompletní uživatelé
-MOCK_USERS = {
-    "admin": {"password": "admin", "role": "admin", "name": "Hlavní Admin"},
-    "udrzba": {"password": "heslo123", "role": "udrzbar", "name": "Jan Novák"},
-    "sklad": {"password": "sklad", "role": "skladnik", "name": "Josef Skladník"}
-}
-
-# OBNOVENO: Kompletní díly (s přidaným prázdným polem 'photos' pro kompatibilitu s novou logikou)
-MOCK_PARTS = [
-    {
-        "part_type": "Servomotor Siemens",
-        "serial_number": "END-20260510-99AA",
-        "parameters": "3x400V, 1.5kW, IP65",
-        "source_equipment": "Lis Kuka 02",
-        "created_by_user": "Jan Novák",
-        "created_at": "2026-05-10T14:32:00",
-        "photos": [],
-        "history": [
-            {
-                "action": "Založení",
-                "user": "Jan Novák",
-                "date": "2026-05-10T14:32:00",
-                "details": {"info": "Původní zaevidování"},
-                "photos": []
-            }
-        ]
-    },
-    {
-        "part_type": "Hydraulický ventil Bosch",
-        "serial_number": "END-20260601-BB44",
-        "parameters": "max 315 bar, 24V DC",
-        "source_equipment": "Hlavní hydraulická stanice",
-        "created_by_user": "Hlavní Admin",
-        "created_at": "2026-06-01T09:15:00",
-        "photos": [],
-        "history": [
-            {
-                "action": "Založení",
-                "user": "Hlavní Admin",
-                "date": "2026-06-01T09:15:00",
-                "details": {"info": "Původní zaevidování"},
-                "photos": []
-            }
-        ]
-    },
-    {
-        "part_type": "Indukční snímač IFM",
-        "serial_number": "SN-987654321",
-        "parameters": "M18, PNP, NO, dosah 8mm",
-        "source_equipment": "Dopravník balení 04",
-        "created_by_user": "Jan Novák",
-        "created_at": "2026-06-12T11:05:00",
-        "photos": [],
-        "history": [
-            {
-                "action": "Založení",
-                "user": "Jan Novák",
-                "date": "2026-06-12T11:05:00",
-                "details": {"info": "Původní zaevidování"},
-                "photos": []
-            }
-        ]
-    }
-]
-
-# --- OBNOVENO: PYDANTIC MODELY ---
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -118,24 +45,86 @@ class RoleSchema(BaseModel):
     name: str
     permissions: List[int]
 
+class SetupRequest(BaseModel):
+    db_host: str
+    db_port: str
+    db_user: str
+    db_password: str
+    db_name: str
+    admin_username: str
+    admin_name: str
+    admin_password: str
 
-# --- ENDPOINTY ---
+@app.on_event("startup")
+def startup_event():
+    # Pokusí se inicializovat z .env. Pokud to nevyjde, nespadne, jen čeká na /api/setup
+    database.try_init_from_env()
+
+@app.get("/api/status")
+def get_status():
+    return {"configured": database.SessionLocal is not None}
+
+@app.post("/api/setup")
+def setup_system(req: SetupRequest):
+    if database.SessionLocal is not None:
+        raise HTTPException(status_code=400, detail="Systém je již nastaven.")
+        
+    try:
+        # Zkusit inicializovat
+        database.init_db(req.db_host, req.db_port, req.db_user, req.db_password, req.db_name)
+        
+        # Zapsat do .env
+        env_path = os.path.join(os.path.dirname(__file__), ".env")
+        from dotenv import set_key
+        # Pokud soubor neexistuje, set_key ho obvykle vytvoří, ale raději:
+        if not os.path.exists(env_path):
+            open(env_path, 'a').close()
+
+        set_key(env_path, "DB_HOST", req.db_host)
+        set_key(env_path, "DB_PORT", req.db_port)
+        set_key(env_path, "DB_USER", req.db_user)
+        set_key(env_path, "DB_PASSWORD", req.db_password)
+        set_key(env_path, "DB_NAME", req.db_name)
+        
+        # Vytvořit tabulky
+        database.Base.metadata.create_all(bind=database.engine)
+        
+        # Přidat výchozí role a uživatele
+        db = database.SessionLocal()
+        if not db.query(models.Role).first():
+            db.add(models.Role(id="admin", name="Administrátor", permissions=[1,2,3,4,5,6,7]))
+            db.add(models.Role(id="udrzbar", name="Údržbář (Základ)", permissions=[1,3,4,7]))
+            db.add(models.Role(id="skladnik", name="Skladník", permissions=[2,5,7]))
+            db.commit()
+            
+        if not db.query(models.User).filter(models.User.username == req.admin_username).first():
+            db.add(models.User(username=req.admin_username, password=req.admin_password, name=req.admin_name, role_id="admin"))
+            db.commit()
+        db.close()
+        
+        return {"status": "success", "message": "Systém byl úspěšně nastaven."}
+    except Exception as e:
+        # reset engine upon failure
+        database.engine = None
+        database.SessionLocal = None
+        raise HTTPException(status_code=400, detail=f"Chyba při připojení k DB: {str(e)}")
+
 
 @app.post("/api/login")
-def login(credentials: LoginRequest):
-    user = MOCK_USERS.get(credentials.username)
-    if not user or user["password"] != credentials.password:
+def login(credentials: LoginRequest, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.username == credentials.username).first()
+    if not user or user.password != credentials.password:
         raise HTTPException(status_code=401, detail="Nesprávné přihlašovací údaje")
     
-    role_data = MOCK_ROLES.get(user["role"], {"name": "Bez role", "permissions": []})
+    role = db.query(models.Role).filter(models.Role.id == user.role_id).first()
     return {
         "token": f"jwt-token-pro-{credentials.username}",
-        "name": user["name"],
-        "role": role_data["name"],
-        "permissions": role_data["permissions"]
+        "name": user.name,
+        "role": role.name if role else "Bez role",
+        "permissions": role.permissions if role else []
     }
 
-# NOVÉ + OBNOVENO: Ukládání dílu s fotkami i s obnovenou proměnnou is_new_generated
+
 @app.post("/api/parts")
 async def create_part(
     part_type: str = Form(...),
@@ -146,7 +135,8 @@ async def create_part(
     source_equipment: str = Form(...),
     source_serial_number: Optional[str] = Form(None),
     created_by_user: str = Form(...),
-    photos: List[UploadFile] = File(default=[])
+    photos: List[UploadFile] = File(default=[]),
+    db: Session = Depends(database.get_db)
 ):
     try:
         if len(photos) > 5:
@@ -159,26 +149,51 @@ async def create_part(
             serial_number = f"END-{date_str}-{short_hash}"
             is_new_generated = True
 
+        if db.query(models.Part).filter(models.Part.serial_number == serial_number).first():
+            raise HTTPException(status_code=400, detail="Díl s tímto sériovým číslem již existuje.")
+
         saved_photo_urls = []
-        
-        # Procházíme nahrávané soubory
         for photo in photos:
             ext = "jpg"
             if photo.filename and photo.filename.strip() != "" and "." in photo.filename:
                 ext = photo.filename.split('.')[-1]
-            
             unique_filename = f"{uuid.uuid4().hex}.{ext}"
             file_path = os.path.join(UPLOAD_DIR, unique_filename)
-            
-            # ASYNCHRONNÍ ČTENÍ
             content = await photo.read()
             with open(file_path, "wb") as buffer:
                 buffer.write(content)
-            
-            # Uložíme veřejnou URL adresu
             saved_photo_urls.append(f"/uploads/{unique_filename}")
 
-        new_part = {
+        new_part = models.Part(
+            serial_number=serial_number,
+            part_type=part_type,
+            parameters=parameters or "Neuvedeno",
+            source_equipment="Neuvedeno",
+            created_by_user=created_by_user,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_part)
+        db.commit()
+
+        for url in saved_photo_urls:
+            db.add(models.PartPhoto(part_id=new_part.serial_number, url=url))
+
+        hist = models.PartHistory(
+            part_id=new_part.serial_number,
+            action="Založení",
+            user=created_by_user,
+            date=new_part.created_at,
+            details={"info": "Původní zaevidování", "source": source_equipment}
+        )
+        db.add(hist)
+        db.commit()
+        db.refresh(hist)
+
+        for url in saved_photo_urls:
+            db.add(models.HistoryPhoto(history_id=hist.id, url=url))
+        db.commit()
+
+        part_dict = {
             "part_type": part_type,
             "device_type": device_type or "Neuvedeno",
             "serial_number": serial_number,
@@ -187,44 +202,73 @@ async def create_part(
             "source_equipment": "Neuvedeno",
             "source_serial_number": source_serial_number or "",
             "created_by_user": created_by_user,
-            "created_at": datetime.now().isoformat(),
+            "created_at": new_part.created_at.isoformat(),
             "photos": saved_photo_urls,
             "history": [
                 {
                     "action": "Založení",
                     "user": created_by_user,
-                    "date": datetime.now().isoformat(),
-                    "details": {"info": "Původní zaevidování", "source": source_equipment},
+                    "date": hist.date.isoformat(),
+                    "details": hist.details,
                     "photos": saved_photo_urls
                 }
             ]
         }
 
-        MOCK_PARTS.insert(0, new_part)
-
         return {
             "status": "success", 
             "message": "Díl zaevidován.", 
-            "part": new_part,
+            "part": part_dict,
             "is_new_generated": is_new_generated
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/parts")
-def get_parts():
-    return MOCK_PARTS
+def get_parts(db: Session = Depends(database.get_db)):
+    parts = db.query(models.Part).order_by(models.Part.created_at.desc()).all()
+    results = []
+    for p in parts:
+        results.append({
+            "serial_number": p.serial_number,
+            "part_type": p.part_type,
+            "parameters": p.parameters,
+            "source_equipment": p.source_equipment,
+            "created_by_user": p.created_by_user,
+            "created_at": p.created_at.isoformat(),
+            "photos": [ph.url for ph in p.photos]
+        })
+    return results
+
 
 @app.get("/api/parts/{serial_number}")
-def get_part_by_sn(serial_number: str):
-    part = next((p for p in MOCK_PARTS if p.get("serial_number") == serial_number), None)
-    if not part:
+def get_part_by_sn(serial_number: str, db: Session = Depends(database.get_db)):
+    p = db.query(models.Part).filter(models.Part.serial_number == serial_number).first()
+    if not p:
         raise HTTPException(status_code=404, detail="Díl nenalezen")
-    if "history" not in part:
-        part["history"] = []
-    return part
+    
+    hist_list = []
+    for h in p.history:
+        hist_list.append({
+            "action": h.action,
+            "user": h.user,
+            "date": h.date.isoformat(),
+            "details": h.details,
+            "photos": [hp.url for hp in h.photos]
+        })
 
-import json
+    return {
+        "serial_number": p.serial_number,
+        "part_type": p.part_type,
+        "parameters": p.parameters,
+        "source_equipment": p.source_equipment,
+        "created_by_user": p.created_by_user,
+        "created_at": p.created_at.isoformat(),
+        "photos": [ph.url for ph in p.photos],
+        "history": hist_list
+    }
+
 
 @app.post("/api/parts/{serial_number}/history")
 async def add_part_history(
@@ -232,9 +276,10 @@ async def add_part_history(
     action: str = Form(...),
     user: str = Form(...),
     details: str = Form("{}"),
-    photos: List[UploadFile] = File(default=[])
+    photos: List[UploadFile] = File(default=[]),
+    db: Session = Depends(database.get_db)
 ):
-    part = next((p for p in MOCK_PARTS if p.get("serial_number") == serial_number), None)
+    part = db.query(models.Part).filter(models.Part.serial_number == serial_number).first()
     if not part:
         raise HTTPException(status_code=404, detail="Díl nenalezen")
         
@@ -244,14 +289,11 @@ async def add_part_history(
             ext = "jpg"
             if photo.filename and photo.filename.strip() != "" and "." in photo.filename:
                 ext = photo.filename.split('.')[-1]
-            
             unique_filename = f"{uuid.uuid4().hex}.{ext}"
             file_path = os.path.join(UPLOAD_DIR, unique_filename)
-            
             content = await photo.read()
             with open(file_path, "wb") as buffer:
                 buffer.write(content)
-            
             saved_photo_urls.append(f"/uploads/{unique_filename}")
 
     try:
@@ -259,55 +301,74 @@ async def add_part_history(
     except:
         details_dict = {"raw": details}
 
-    record = {
-        "action": action,
-        "user": user,
-        "date": datetime.now().isoformat(),
-        "details": details_dict,
-        "photos": saved_photo_urls
-    }
-    
-    if "history" not in part:
-        part["history"] = []
-    
-    part["history"].insert(0, record)
-    
-    return {"status": "success", "message": "Historie aktualizována", "part": part}
+    hist = models.PartHistory(
+        part_id=part.serial_number,
+        action=action,
+        user=user,
+        date=datetime.utcnow(),
+        details=details_dict
+    )
+    db.add(hist)
+    db.commit()
+    db.refresh(hist)
+
+    for url in saved_photo_urls:
+        db.add(models.HistoryPhoto(history_id=hist.id, url=url))
+    db.commit()
+
+    return {"status": "success", "message": "Historie aktualizována"}
+
 
 @app.get("/api/users")
-def get_users():
-    return [{"username": k, "name": v["name"], "role": v["role"], "password": v["password"]} for k, v in MOCK_USERS.items()]
+def get_users(db: Session = Depends(database.get_db)):
+    users = db.query(models.User).all()
+    return [{"username": u.username, "name": u.name, "role": u.role_id, "password": u.password} for u in users]
 
-# OBNOVENO: Vytváření a úprava uživatelů
+
 @app.post("/api/users")
-def create_user(user: UserSchema):
-    if user.username in MOCK_USERS: 
+def create_user(user: UserSchema, db: Session = Depends(database.get_db)):
+    if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Uživatel již existuje.")
-    MOCK_USERS[user.username] = {"password": user.password, "role": user.role, "name": user.name}
+    new_user = models.User(username=user.username, password=user.password, name=user.name, role_id=user.role)
+    db.add(new_user)
+    db.commit()
     return {"message": "Uživatel úspěšně vytvořen"}
 
+
 @app.put("/api/users/{username}")
-def update_user(username: str, data: UserUpdateSchema):
-    if username not in MOCK_USERS: 
+def update_user(username: str, data: UserUpdateSchema, db: Session = Depends(database.get_db)):
+    u = db.query(models.User).filter(models.User.username == username).first()
+    if not u:
         raise HTTPException(status_code=404, detail="Nenalezen.")
-    MOCK_USERS[username] = {"password": data.password, "role": data.role, "name": data.name}
+    u.password = data.password
+    u.name = data.name
+    u.role_id = data.role
+    db.commit()
     return {"message": "Aktualizováno"}
 
-@app.get("/api/roles")
-def get_roles():
-    return [{"id": k, "name": v["name"], "permissions": v["permissions"]} for k, v in MOCK_ROLES.items()]
 
-# OBNOVENO: Vytváření a úprava rolí
+@app.get("/api/roles")
+def get_roles(db: Session = Depends(database.get_db)):
+    roles = db.query(models.Role).all()
+    return [{"id": r.id, "name": r.name, "permissions": r.permissions} for r in roles]
+
+
 @app.post("/api/roles")
-def create_role(role: RoleSchema):
-    if role.id in MOCK_ROLES: 
+def create_role(role: RoleSchema, db: Session = Depends(database.get_db)):
+    if db.query(models.Role).filter(models.Role.id == role.id).first():
         raise HTTPException(status_code=400, detail="Existuje.")
-    MOCK_ROLES[role.id] = {"name": role.name, "permissions": role.permissions}
+    new_role = models.Role(id=role.id, name=role.name, permissions=role.permissions)
+    db.add(new_role)
+    db.commit()
     return {"message": "Vytvořeno"}
 
+
 @app.put("/api/roles/{role_id}")
-def update_role(role_id: str, role: RoleSchema):
-    if role_id not in MOCK_ROLES: 
+def update_role(role_id: str, role: RoleSchema, db: Session = Depends(database.get_db)):
+    r = db.query(models.Role).filter(models.Role.id == role_id).first()
+    if not r:
         raise HTTPException(status_code=404, detail="Nenalezen.")
-    MOCK_ROLES[role_id] = {"name": role.name, "permissions": role.permissions}
+    r.name = role.name
+    r.permissions = role.permissions
+    db.commit()
     return {"message": "Upraveno"}

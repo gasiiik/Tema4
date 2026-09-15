@@ -9,9 +9,12 @@ import RepairArrivalForm from './components/RepairArrivalForm';
 import DismantleForm from './components/DismantleForm';
 import DispatchForm from './components/DispatchForm';
 import PartInfoView from './components/PartInfoView';
-import { Moon, Sun } from 'lucide-react';
+import SetupWizard from './components/SetupWizard';
+import { Moon, Sun, Loader2 } from 'lucide-react';
 
 function App() {
+  const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('isAuthenticated') === 'true';
   });
@@ -27,7 +30,7 @@ function App() {
         return JSON.parse(saved);
       }
     } catch (e) {
-      console.warn("Chyba při čtení oprávnění z localStorage.", e);
+      console.warn("Chyba při čtení oprávnění.", e);
     }
     return [];
   });
@@ -49,6 +52,14 @@ function App() {
     }
   }, [isDarkMode]);
 
+  // Check setup status on load
+  useEffect(() => {
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(data => setIsConfigured(data.configured))
+      .catch(() => setIsConfigured(false));
+  }, []);
+
   const handleLoginSuccess = (name: string, token: string, rememberMe: boolean, permissions: number[]) => {
     setUserName(name);
     setUserPermissions(permissions);
@@ -69,15 +80,27 @@ function App() {
     localStorage.clear();
   };
 
-  // --- NOVÉ: DYNAMICKÁ RESPONSIVNÍ ŠÍŘKA STRÁNKY ---
-  // Odstraní posuvníky u velkých tabulek tím, že jim dovolí využít prostor obrazovky
   const getWrapperWidth = () => {
-    if (!isAuthenticated) return 'max-w-md';                      // Přihlašovací okno zůstane kompaktní
-    if (activeModule === null) return 'max-w-4xl';                 // Menu bude středně široké
-    return 'max-w-6xl xl:max-w-7xl w-full';                        // Přehledy, tabulky a formuláře se roztáhnou na maximum
+    if (isConfigured === false) return 'max-w-2xl';
+    if (!isAuthenticated) return 'max-w-md';
+    if (activeModule === null) return 'max-w-4xl';
+    return 'max-w-6xl xl:max-w-7xl w-full';
   };
 
   const renderContent = () => {
+    if (isConfigured === null) {
+      return (
+        <div className="flex flex-col items-center justify-center text-gray-500">
+          <Loader2 className="w-12 h-12 animate-spin mb-4 text-indigo-500" />
+          <p>Ověřuji stav systému...</p>
+        </div>
+      );
+    }
+
+    if (isConfigured === false) {
+      return <SetupWizard onComplete={() => setIsConfigured(true)} />;
+    }
+
     if (!isAuthenticated) return <LoginForm onLoginSuccess={handleLoginSuccess} />;
 
     if (activeModule === 1) return <PartCreationForm userName={userName} userPermissions={userPermissions} onBack={() => setActiveModule(null)} />;
@@ -94,9 +117,7 @@ function App() {
   };
 
   return (
-    // 'transition-all duration-300' zajistí plynulé roztažení okna při rozkliknutí modulu
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex flex-col items-center justify-center p-2 sm:p-6">
-      
       <div className="absolute top-4 right-4 z-10">
         <button
           onClick={() => setIsDarkMode(!isDarkMode)}
@@ -106,8 +127,7 @@ function App() {
         </button>
       </div>
 
-      {/* TADY SE LOGIKA PROJEVÍ: Třída max-w se mění dynamicky podle funkce getWrapperWidth */}
-      <div className={`${getWrapperWidth()} transition-all duration-300 mx-auto animate-fade-in-up`}>
+      <div className={`${getWrapperWidth()} transition-all duration-300 mx-auto animate-fade-in-up w-full`}>
         {renderContent()}
       </div>
     </div>
