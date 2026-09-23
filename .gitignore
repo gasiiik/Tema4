@@ -19,6 +19,8 @@ frontend/dist/
 
 # Aplikační data
 backend/uploads/
+backend/.env
+
 
 # Ostatní (zálohy, systémové soubory)
 *.zip
