@@ -1,3 +1,4 @@
+import { apiFetch } from './apiFetch';
 import { useState, useEffect } from 'react';
 import LoginForm from './components/LoginForm';
 import MainMenu from './components/MainMenu';
@@ -10,7 +11,6 @@ import DismantleForm from './components/DismantleForm';
 import DispatchForm from './components/DispatchForm';
 import PartInfoView from './components/PartInfoView';
 import SetupWizard from './components/SetupWizard';
-import { Moon, Sun, Loader2 } from 'lucide-react';
 
 function App() {
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
@@ -52,11 +52,13 @@ function App() {
     }
   }, [isDarkMode]);
 
-  // Check setup status on load
   useEffect(() => {
-    fetch('/api/status')
-      .then(res => res.json())
-      .then(data => setIsConfigured(data.configured))
+    apiFetch('/api/status')
+      .then(async res => {
+        const text = await res.text();
+        return text ? JSON.parse(text) : {};
+      })
+      .then(data => setIsConfigured(!!data.configured))
       .catch(() => setIsConfigured(false));
   }, []);
 
@@ -91,7 +93,11 @@ function App() {
     if (isConfigured === null) {
       return (
         <div className="flex flex-col items-center justify-center text-gray-500">
-          <Loader2 className="w-12 h-12 animate-spin mb-4 text-indigo-500" />
+          <div className="loader scale-150 mb-8 mt-4 text-indigo-500 dark:text-gray-400">
+            <span className="bar"></span>
+            <span className="bar"></span>
+            <span className="bar"></span>
+          </div>
           <p>Ověřuji stav systému...</p>
         </div>
       );
@@ -117,14 +123,31 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300 flex flex-col items-center justify-center p-2 sm:p-6">
-      <div className="absolute top-4 right-4 z-10">
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2.5 rounded-full bg-white dark:bg-gray-800 shadow-md hover:scale-110 transition-transform focus:outline-none border border-gray-100 dark:border-gray-700"
-        >
-          {isDarkMode ? <Sun className="text-yellow-400 w-6 h-6" /> : <Moon className="text-indigo-600 w-6 h-6" />}
-        </button>
+    <div className="min-h-screen bg-gray-50 dark:bg-[#121212] text-gray-900 dark:text-gray-100 transition-colors duration-300 flex flex-col items-center justify-center p-2 sm:p-6">
+      <div className="fixed top-3 right-3 z-50">
+        <label className="themeToggle st-sunMoonThemeToggleBtn" title="Toggle theme">
+          <input
+            type="checkbox"
+            className="themeToggleInput"
+            checked={!isDarkMode}
+            onChange={() => setIsDarkMode(!isDarkMode)}
+          />
+          <svg viewBox="0 0 20 20" fill="currentColor" stroke="none">
+            <mask id="moon-mask">
+              <rect x="0" y="0" width="20" height="20" fill="white"></rect>
+              <circle cx="11" cy="3" r="8" fill="black"></circle>
+            </mask>
+            <circle className="sunMoon" cx="10" cy="10" r="8" mask="url(#moon-mask)"></circle>
+            <g>
+              <circle className="sunRay sunRay1" cx="18" cy="10" r="1.5"></circle>
+              <circle className="sunRay sunRay2" cx="14" cy="16.928" r="1.5"></circle>
+              <circle className="sunRay sunRay3" cx="6" cy="16.928" r="1.5"></circle>
+              <circle className="sunRay sunRay4" cx="2" cy="10" r="1.5"></circle>
+              <circle className="sunRay sunRay5" cx="6" cy="3.1718" r="1.5"></circle>
+              <circle className="sunRay sunRay6" cx="14" cy="3.1718" r="1.5"></circle>
+            </g>
+          </svg>
+        </label>
       </div>
 
       <div className={`${getWrapperWidth()} transition-all duration-300 mx-auto animate-fade-in-up w-full`}>

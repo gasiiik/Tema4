@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState, useEffect } from 'react';
 // Přidány ikony ChevronLeft a ChevronRight pro listování
 import { ArrowLeft, Search, Calendar, User, Cpu, Hash, LayoutGrid, ShieldAlert, Loader2, Image as ImageIcon, X, ChevronLeft, ChevronRight, Printer, Info } from 'lucide-react';
@@ -38,7 +39,7 @@ export default function PartListModule({ onBack, userPermissions }: PartListModu
   }
 
   useEffect(() => {
-    fetch('/api/parts')
+    apiFetch('/api/parts')
       .then(res => res.json())
       .then(data => {
         setParts(data);

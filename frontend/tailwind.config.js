@@ -1,3 +1,5 @@
+import colors from 'tailwindcss/colors';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   // Aktivuje manuální přepínání dark modu pomocí třídy 'dark' na elementu <html>
@@ -8,6 +10,9 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        gray: colors.neutral,
+      },
       // Zde definujeme vlastní animační kroky (odkud kam se prvek posune/změní)
       keyframes: {
         fadeInUp: {

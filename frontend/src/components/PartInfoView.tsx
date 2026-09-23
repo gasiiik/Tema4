@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState } from 'react';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import PartSplitLayout from './Shared/PartSplitLayout';
@@ -23,7 +24,7 @@ export default function PartInfoView({ onBack, initialScannedCode }: PartInfoVie
   async function handleScanSuccess(scannedCode: string) {
     setIsScanning(false);
     try {
-      const response = await fetch(`/api/parts/${scannedCode}`);
+      const response = await apiFetch(`/api/parts/${scannedCode}`);
       if (!response.ok) throw new Error('Díl nenalezen v databázi.');
       const data = await response.json();
       setPart(data);

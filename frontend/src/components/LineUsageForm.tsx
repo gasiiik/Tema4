@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState } from 'react';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import PartSplitLayout from './Shared/PartSplitLayout';
@@ -24,7 +25,7 @@ export default function LineUsageForm({ userName, userPermissions, onBack }: Lin
   const handleScanSuccess = async (scannedCode: string) => {
     setIsScanning(false);
     try {
-      const response = await fetch(`/api/parts/${scannedCode}`);
+      const response = await apiFetch(`/api/parts/${scannedCode}`);
       if (!response.ok) {
         throw new Error('Díl nenalezen v databázi.');
       }
@@ -55,7 +56,7 @@ export default function LineUsageForm({ userName, userPermissions, onBack }: Lin
       };
       formData.append('details', JSON.stringify(details));
 
-      const res = await fetch(`/api/parts/${part.serial_number}/history`, {
+      const res = await apiFetch(`/api/parts/${part.serial_number}/history`, {
         method: 'POST',
         body: formData,
       });

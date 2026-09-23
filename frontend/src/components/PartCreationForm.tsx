@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState, FormEvent, ChangeEvent } from 'react';
 import { ArrowLeft, Camera, Loader2, CheckCircle2, FileText, Settings, Cpu, AlertTriangle, Plus, X, Printer, Barcode as BarcodeIcon, Scan } from 'lucide-react';
 import BarcodeScannerModal from './BarcodeScannerModal';
@@ -94,7 +95,7 @@ export default function PartCreationForm({ userName, userPermissions, onBack }: 
       // Přidáme všechny fotky pod stejným klíčem "photos"
       photos.forEach(p => formData.append('photos', p.file));
 
-      const response = await fetch('/api/parts', {
+      const response = await apiFetch('/api/parts', {
         method: 'POST',
         body: formData,
       });

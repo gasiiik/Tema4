@@ -1,3 +1,4 @@
+import { apiFetch } from './apiFetch';
 interface Item {
     id: number;
     name: string;
@@ -7,7 +8,7 @@ const fetchItems = async (): Promise<void> => {
     const appDiv = document.getElementById('app');
     
     try {
-        const response = await fetch('/api/items');
+        const response = await apiFetch('/api/items');
         if (!response.ok) throw new Error('Chyba sítě');
         
         const data: Item[] = await response.json();

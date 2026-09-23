@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState } from 'react';
 import BarcodeScannerModal from './BarcodeScannerModal';
 import PartSplitLayout from './Shared/PartSplitLayout';
@@ -26,7 +27,7 @@ export default function RepairArrivalForm({ userName, userPermissions, onBack }:
   const handleScanSuccess = async (scannedCode: string) => {
     setIsScanning(false);
     try {
-      const response = await fetch(`/api/parts/${scannedCode}`);
+      const response = await apiFetch(`/api/parts/${scannedCode}`);
       if (!response.ok) throw new Error('Díl nenalezen v databázi.');
       const data = await response.json();
       setPart(data);
@@ -72,7 +73,7 @@ export default function RepairArrivalForm({ userName, userPermissions, onBack }:
         formData.append('photos', file);
       });
 
-      const res = await fetch(`/api/parts/${part.serial_number}/history`, {
+      const res = await apiFetch(`/api/parts/${part.serial_number}/history`, {
         method: 'POST',
         body: formData,
       });

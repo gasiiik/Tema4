@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState, FormEvent } from 'react';
 import { Eye, EyeOff, Lock, User, Loader2 } from 'lucide-react';
 
@@ -23,7 +24,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
       // Malá prodleva pro efekt (v produkci můžeš smazat)
       await new Promise(resolve => setTimeout(resolve, 600));
 
-      const response = await fetch('/api/login', {
+      const response = await apiFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import uuid
 import json
 from typing import List, Optional
@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import database
 import models
+import security
 
 app = FastAPI(title="Evidence Náhradních Dílů API")
 
@@ -98,7 +99,7 @@ def setup_system(req: SetupRequest):
             db.commit()
             
         if not db.query(models.User).filter(models.User.username == req.admin_username).first():
-            db.add(models.User(username=req.admin_username, password=req.admin_password, name=req.admin_name, role_id="admin"))
+            db.add(models.User(username=req.admin_username, password=security.get_password_hash(req.admin_password), name=req.admin_name, role_id="admin"))
             db.commit()
         db.close()
         
@@ -113,12 +114,12 @@ def setup_system(req: SetupRequest):
 @app.post("/api/login")
 def login(credentials: LoginRequest, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.username == credentials.username).first()
-    if not user or user.password != credentials.password:
+    if not user or not security.verify_password(credentials.password, user.password):
         raise HTTPException(status_code=401, detail="Nesprávné přihlašovací údaje")
     
     role = db.query(models.Role).filter(models.Role.id == user.role_id).first()
     return {
-        "token": f"jwt-token-pro-{credentials.username}",
+        "token": security.create_access_token(data={"sub": user.username}),
         "name": user.name,
         "role": role.name if role else "Bez role",
         "permissions": role.permissions if role else []
@@ -136,7 +137,8 @@ async def create_part(
     source_serial_number: Optional[str] = Form(None),
     created_by_user: str = Form(...),
     photos: List[UploadFile] = File(default=[]),
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user)
 ):
     try:
         if len(photos) > 5:
@@ -226,7 +228,7 @@ async def create_part(
 
 
 @app.get("/api/parts")
-def get_parts(db: Session = Depends(database.get_db)):
+def get_parts(db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     parts = db.query(models.Part).order_by(models.Part.created_at.desc()).all()
     results = []
     for p in parts:
@@ -243,7 +245,7 @@ def get_parts(db: Session = Depends(database.get_db)):
 
 
 @app.get("/api/parts/{serial_number}")
-def get_part_by_sn(serial_number: str, db: Session = Depends(database.get_db)):
+def get_part_by_sn(serial_number: str, db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     p = db.query(models.Part).filter(models.Part.serial_number == serial_number).first()
     if not p:
         raise HTTPException(status_code=404, detail="Díl nenalezen")
@@ -277,7 +279,8 @@ async def add_part_history(
     user: str = Form(...),
     details: str = Form("{}"),
     photos: List[UploadFile] = File(default=[]),
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user)
 ):
     part = db.query(models.Part).filter(models.Part.serial_number == serial_number).first()
     if not part:
@@ -320,27 +323,27 @@ async def add_part_history(
 
 
 @app.get("/api/users")
-def get_users(db: Session = Depends(database.get_db)):
+def get_users(db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     users = db.query(models.User).all()
     return [{"username": u.username, "name": u.name, "role": u.role_id, "password": u.password} for u in users]
 
 
 @app.post("/api/users")
-def create_user(user: UserSchema, db: Session = Depends(database.get_db)):
+def create_user(user: UserSchema, db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     if db.query(models.User).filter(models.User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Uživatel již existuje.")
-    new_user = models.User(username=user.username, password=user.password, name=user.name, role_id=user.role)
+    new_user = models.User(username=user.username, password=security.get_password_hash(user.password), name=user.name, role_id=user.role)
     db.add(new_user)
     db.commit()
     return {"message": "Uživatel úspěšně vytvořen"}
 
 
 @app.put("/api/users/{username}")
-def update_user(username: str, data: UserUpdateSchema, db: Session = Depends(database.get_db)):
+def update_user(username: str, data: UserUpdateSchema, db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     u = db.query(models.User).filter(models.User.username == username).first()
     if not u:
         raise HTTPException(status_code=404, detail="Nenalezen.")
-    u.password = data.password
+    if data.password: u.password = security.get_password_hash(data.password)
     u.name = data.name
     u.role_id = data.role
     db.commit()
@@ -348,13 +351,13 @@ def update_user(username: str, data: UserUpdateSchema, db: Session = Depends(dat
 
 
 @app.get("/api/roles")
-def get_roles(db: Session = Depends(database.get_db)):
+def get_roles(db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     roles = db.query(models.Role).all()
     return [{"id": r.id, "name": r.name, "permissions": r.permissions} for r in roles]
 
 
 @app.post("/api/roles")
-def create_role(role: RoleSchema, db: Session = Depends(database.get_db)):
+def create_role(role: RoleSchema, db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     if db.query(models.Role).filter(models.Role.id == role.id).first():
         raise HTTPException(status_code=400, detail="Existuje.")
     new_role = models.Role(id=role.id, name=role.name, permissions=role.permissions)
@@ -364,7 +367,7 @@ def create_role(role: RoleSchema, db: Session = Depends(database.get_db)):
 
 
 @app.put("/api/roles/{role_id}")
-def update_role(role_id: str, role: RoleSchema, db: Session = Depends(database.get_db)):
+def update_role(role_id: str, role: RoleSchema, db: Session = Depends(database.get_db), current_user: models.User = Depends(security.get_current_user)):
     r = db.query(models.Role).filter(models.Role.id == role_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Nenalezen.")
@@ -372,3 +375,4 @@ def update_role(role_id: str, role: RoleSchema, db: Session = Depends(database.g
     r.permissions = role.permissions
     db.commit()
     return {"message": "Upraveno"}
+

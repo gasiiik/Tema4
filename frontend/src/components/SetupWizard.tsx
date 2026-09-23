@@ -1,3 +1,4 @@
+import { apiFetch } from '../apiFetch';
 import { useState } from 'react';
 import { Database, Server, User as UserIcon, Lock, Save, CheckCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 
@@ -49,7 +50,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     setError('');
 
     try {
-      const res = await fetch('/api/setup', {
+      const res = await apiFetch('/api/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
