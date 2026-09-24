@@ -1,4 +1,4 @@
-﻿import os
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from dotenv import load_dotenv
@@ -20,7 +20,7 @@ def init_db(db_host, db_port, db_user, db_pass, db_name):
     return url
 
 def try_init_from_env():
-    load_dotenv()
+    load_dotenv(override=True)
     host = os.getenv("DB_HOST")
     if not host:
         return False
